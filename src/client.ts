@@ -31,6 +31,10 @@ const save = () =>
 const $ = (id: string) =>
   document.getElementById(id) as HTMLElement;
 
+// ======================================================
+// AETHER AGENT
+// ======================================================
+
 const agent = new AgentClient({
   agent: "ReminderAgent",
   name: "elahe",
@@ -39,35 +43,9 @@ const agent = new AgentClient({
 
 let vapidPublicKey: string | null = null;
 
-/* =========================================================
-   UTILIDADES
-========================================================= */
-
-function b64ToUint8(base64url: string): Uint8Array {
-  const normalized = base64url
-    .trim()
-    .replace(/"/g, "")
-    .replace(/-/g, "+")
-    .replace(/_/g, "/");
-
-  const padded =
-    normalized +
-    "=".repeat((4 - (normalized.length % 4)) % 4);
-
-  const binary = atob(padded);
-
-  const bytes = new Uint8Array(binary.length);
-
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-
-  return bytes;
-}
-
-/* =========================================================
-   RENDER
-========================================================= */
+// ======================================================
+// RENDER
+// ======================================================
 
 function render() {
   $("dateText").textContent =
@@ -95,9 +73,8 @@ function render() {
   $("routineStat").textContent =
     `${done}/3`;
 
-  (
-    document.getElementById("routineBar") as HTMLElement
-  ).style.width =
+  (document.getElementById("routineBar") as HTMLElement)
+    .style.width =
     `${(done / 3) * 100}%`;
 
   if (done === 3) {
@@ -113,33 +90,103 @@ function render() {
   }
 }
 
-/* =========================================================
-   PUSH NOTIFICATIONS
-========================================================= */
+// ======================================================
+// VAPID BASE64URL → UINT8ARRAY
+// ======================================================
+
+function b64ToUint8(base64url: string): Uint8Array {
+  const padded =
+    base64url +
+    "=".repeat(
+      (4 - (base64url.length % 4)) % 4
+    );
+
+  const binary = atob(
+    padded
+      .replace(/-/g, "+")
+      .replace(/_/g, "/")
+  );
+
+  let bytes =
+    new Uint8Array(binary.length);
+
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] =
+      binary.charCodeAt(i);
+  }
+
+  console.log(
+    "VAPID bytes antes de normalizar:",
+    bytes.length
+  );
+
+  // Una clave pública P-256 en formato
+  // no comprimido debe tener:
+  //
+  // 1 byte de prefijo 0x04
+  // + 32 bytes X
+  // + 32 bytes Y
+  //
+  // Total = 65 bytes.
+  //
+  // Nuestro servidor actualmente está
+  // devolviendo X + Y = 64 bytes.
+  // Agregamos el prefijo 0x04.
+
+  if (bytes.length === 64) {
+    const fixed =
+      new Uint8Array(65);
+
+    fixed[0] = 0x04;
+
+    fixed.set(bytes, 1);
+
+    bytes = fixed;
+  }
+
+  console.log(
+    "VAPID bytes finales:",
+    bytes.length
+  );
+
+  if (bytes.length !== 65) {
+    throw new Error(
+      `La VAPID public key debe tener 65 bytes. Tiene ${bytes.length}.`
+    );
+  }
+
+  return bytes;
+}
+
+// ======================================================
+// ACTIVAR PUSH
+// ======================================================
 
 async function enablePush() {
   try {
-    /* -----------------------------------------------------
-       1. Verificar soporte del navegador
-    ----------------------------------------------------- */
+    console.log(
+      "🔔 Iniciando activación de Push..."
+    );
 
+    // Verificar soporte
     if (
       !("serviceWorker" in navigator) ||
-      !("PushManager" in window) ||
-      !("Notification" in window)
+      !("PushManager" in window)
     ) {
       $("pushStatus").textContent =
-        "Este navegador no admite las notificaciones Push.";
+        "Este navegador no admite Push API.";
 
       return;
     }
 
-    /* -----------------------------------------------------
-       2. Pedir permiso al usuario
-    ----------------------------------------------------- */
-
+    // Pedir permiso al navegador
     const permission =
       await Notification.requestPermission();
+
+    console.log(
+      "Permiso de notificaciones:",
+      permission
+    );
 
     if (permission !== "granted") {
       $("pushStatus").textContent =
@@ -148,111 +195,91 @@ async function enablePush() {
       return;
     }
 
-    /* -----------------------------------------------------
-       3. Registrar Service Worker
-    ----------------------------------------------------- */
+    // Registrar Service Worker
+    console.log(
+      "Registrando Service Worker..."
+    );
 
-    await navigator.serviceWorker.register("/sw.js");
+    await navigator.serviceWorker.register(
+      "/sw.js"
+    );
 
-    /* -----------------------------------------------------
-       4. Obtener VAPID public key desde Cloudflare
-    ----------------------------------------------------- */
+    // Obtener VAPID pública desde Cloudflare
+    console.log(
+      "Solicitando VAPID public key..."
+    );
 
-    const response =
-      await agent.call("getVapidPublicKey");
+    vapidPublicKey =
+      vapidPublicKey ||
+      await agent.call(
+        "getVapidPublicKey"
+      );
 
     console.log(
       "Respuesta VAPID recibida:",
-      response
+      vapidPublicKey
     );
 
-    if (!response) {
+    if (
+      !vapidPublicKey ||
+      typeof vapidPublicKey !== "string"
+    ) {
       throw new Error(
-        "Cloudflare no devolvió una VAPID public key."
+        "Cloudflare no devolvió una VAPID public key válida."
       );
     }
-
-    vapidPublicKey = String(response).trim();
 
     console.log(
       "VAPID public key recibida correctamente."
     );
 
-    /* -----------------------------------------------------
-       5. Convertir la clave a Uint8Array
-    ----------------------------------------------------- */
-
-    const keyBytes =
-      b64ToUint8(vapidPublicKey);
-
-    console.log(
-      "VAPID key bytes:",
-      keyBytes.length
-    );
-
-    /* -----------------------------------------------------
-       6. Validar tamaño de clave P-256
-    ----------------------------------------------------- */
-
-    if (keyBytes.length !== 65) {
-      throw new Error(
-        `La VAPID public key debe tener 65 bytes. Tiene ${keyBytes.length}.`
-      );
-    }
-
-    /* -----------------------------------------------------
-       7. Esperar Service Worker
-    ----------------------------------------------------- */
-
+    // Obtener Service Worker listo
     const reg =
       await navigator.serviceWorker.ready;
 
-    /* -----------------------------------------------------
-       8. Buscar suscripción existente
-    ----------------------------------------------------- */
-
+    // Buscar suscripción existente
     let sub =
       await reg.pushManager.getSubscription();
 
-    /* -----------------------------------------------------
-       9. Crear suscripción Push
-    ----------------------------------------------------- */
-
+    // Crear suscripción si no existe
     if (!sub) {
+      console.log(
+        "Creando nueva suscripción Push..."
+      );
+
+      const applicationServerKey =
+        b64ToUint8(vapidPublicKey);
+
       sub =
         await reg.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: keyBytes
+          applicationServerKey
         });
     }
 
-    /* -----------------------------------------------------
-       10. Convertir suscripción a JSON
-    ----------------------------------------------------- */
+    console.log(
+      "Push subscription creada:",
+      sub
+    );
 
     const j = sub.toJSON();
 
-    console.log(
-      "Push subscription creada:",
-      j
+    // Guardar suscripción en nuestro Agent
+    await agent.call(
+      "subscribe",
+      [
+        {
+          endpoint: j.endpoint,
+          expirationTime:
+            j.expirationTime ?? null,
+          keys: j.keys
+        }
+      ]
     );
 
-    /* -----------------------------------------------------
-       11. Enviar suscripción al Agent
-    ----------------------------------------------------- */
-
-    await agent.call("subscribe", [
-      {
-        endpoint: j.endpoint,
-        expirationTime:
-          j.expirationTime ?? null,
-        keys: j.keys
-      }
-    ]);
-
-    /* -----------------------------------------------------
-       12. ÉXITO
-    ----------------------------------------------------- */
+    console.log(
+      "✅ Suscripción guardada correctamente."
+    );
 
     $("pushStatus").textContent =
       "✅ Push activado. Aether puede avisarte aunque cierres la app.";
@@ -262,21 +289,18 @@ async function enablePush() {
 
   } catch (e) {
     console.error(
-      "ERROR ACTIVANDO PUSH:",
+      "❌ ERROR ACTIVANDO PUSH:",
       e
     );
 
     $("pushStatus").textContent =
-      "❌ No se pudo activar el push.";
-
-    $("coach").textContent =
-      "Falló la activación del push. Mira la consola para ver el error.";
+      "No se pudo activar el push. Revisa permisos y vuelve a intentar.";
   }
 }
 
-/* =========================================================
-   CREAR RECORDATORIO
-========================================================= */
+// ======================================================
+// CREAR RECORDATORIO
+// ======================================================
 
 async function createReminder(
   message: string,
@@ -288,31 +312,39 @@ async function createReminder(
     }
 
     if (
-      !("Notification" in window) ||
-      Notification.permission !== "granted"
+      Notification.permission !==
+      "granted"
     ) {
       return;
     }
 
-    await agent.call("createReminder", [
-      message,
-      seconds
-    ]);
+    await agent.call(
+      "createReminder",
+      [
+        message,
+        seconds
+      ]
+    );
+
+    console.log(
+      "⏰ Recordatorio creado:",
+      message
+    );
 
   } catch (e) {
     console.error(
-      "ERROR CREANDO RECORDATORIO:",
+      "❌ Error creando recordatorio:",
       e
     );
 
     $("coach").textContent =
-      "No pude programar el push. Primero activa las notificaciones.";
+      "No pude programar el push. Primero activa notificaciones.";
   }
 }
 
-/* =========================================================
-   GAMING / ESTUDIO
-========================================================= */
+// ======================================================
+// INICIAR SESIÓN
+// ======================================================
 
 function start(
   type: "game" | "study"
@@ -361,10 +393,14 @@ function start(
   );
 }
 
+// ======================================================
+// MOSTRAR SESIÓN
+// ======================================================
+
 function showSession() {
-  $("sessionCard").classList.remove(
-    "hidden"
-  );
+  $("sessionCard")
+    .classList
+    .remove("hidden");
 
   $("sessionTitle").textContent =
     state.session.type === "game"
@@ -377,19 +413,19 @@ function showSession() {
       : "BLOQUE ACTIVO";
 }
 
-/* =========================================================
-   TIMER
-========================================================= */
+// ======================================================
+// TIMER
+// ======================================================
 
 function tick() {
-  if (!state.session) return;
+  if (!state.session) {
+    return;
+  }
 
   const left =
     state.session.limit * 60000 -
-    (
-      Date.now() -
-      state.session.start
-    );
+    (Date.now() -
+      state.session.start);
 
   const sec =
     Math.floor(
@@ -409,7 +445,8 @@ function tick() {
   $("sessionHint").textContent =
     left > 0
       ? "Tiempo restante recomendado"
-      : state.session.type === "game"
+      : state.session.type ===
+        "game"
       ? "⏰ LÍMITE ALCANZADO — guarda y sal."
       : "⏰ Bloque terminado — descansa 10 minutos.";
 
@@ -417,21 +454,21 @@ function tick() {
     (window as any).__rae
   );
 
-  (
-    window as any
-  ).__rae =
+  (window as any).__rae =
     setTimeout(
       tick,
       1000
     );
 }
 
-/* =========================================================
-   FINALIZAR SESIÓN
-========================================================= */
+// ======================================================
+// FINALIZAR SESIÓN
+// ======================================================
 
 function finish() {
-  if (!state.session) return;
+  if (!state.session) {
+    return;
+  }
 
   const mins =
     Math.max(
@@ -465,9 +502,9 @@ function finish() {
       : "Buen bloque. Descansa 10 minutos.";
 }
 
-/* =========================================================
-   CHECKLIST DE RUTINA
-========================================================= */
+// ======================================================
+// CHECKBOXES DE RUTINA
+// ======================================================
 
 document
   .querySelectorAll<HTMLInputElement>(
@@ -488,9 +525,9 @@ document
     )
   );
 
-/* =========================================================
-   BOTÓN ACTIVAR PUSH
-========================================================= */
+// ======================================================
+// BOTÓN ACTIVAR PUSH
+// ======================================================
 
 $("enablePush")
   .addEventListener(
@@ -498,9 +535,9 @@ $("enablePush")
     enablePush
   );
 
-/* =========================================================
-   BOTÓN PRUEBA PUSH
-========================================================= */
+// ======================================================
+// BOTÓN TEST PUSH
+// ======================================================
 
 $("testPush")
   .addEventListener(
@@ -512,9 +549,9 @@ $("testPush")
       )
   );
 
-/* =========================================================
-   BOTÓN GAMING
-========================================================= */
+// ======================================================
+// BOTÓN GAMING
+// ======================================================
 
 $("startGame")
   .addEventListener(
@@ -523,9 +560,9 @@ $("startGame")
       start("game")
   );
 
-/* =========================================================
-   BOTÓN ESTUDIO
-========================================================= */
+// ======================================================
+// BOTÓN ESTUDIO
+// ======================================================
 
 $("startStudy")
   .addEventListener(
@@ -534,9 +571,9 @@ $("startStudy")
       start("study")
   );
 
-/* =========================================================
-   BOTÓN FINALIZAR
-========================================================= */
+// ======================================================
+// BOTÓN FINALIZAR
+// ======================================================
 
 $("finishBtn")
   .addEventListener(
@@ -544,9 +581,9 @@ $("finishBtn")
     finish
   );
 
-/* =========================================================
-   CONTINUAR SESIÓN
-========================================================= */
+// ======================================================
+// CONTINUAR SESIÓN
+// ======================================================
 
 $("continueBtn")
   .addEventListener(
@@ -566,9 +603,9 @@ $("continueBtn")
     }
   );
 
-/* =========================================================
-   RESET
-========================================================= */
+// ======================================================
+// REINICIAR DATOS
+// ======================================================
 
 $("resetBtn")
   .addEventListener(
@@ -588,22 +625,16 @@ $("resetBtn")
     }
   );
 
-/* =========================================================
-   REGISTRAR SERVICE WORKER
-========================================================= */
+// ======================================================
+// SERVICE WORKER
+// ======================================================
 
 navigator.serviceWorker
   ?.register("/sw.js")
-  .catch(
-    (e) =>
-      console.error(
-        "No se pudo registrar sw.js:",
-        e
-      )
-  );
+  .catch(() => {});
 
-/* =========================================================
-   INICIO
-========================================================= */
+// ======================================================
+// INICIALIZAR
+// ======================================================
 
 render();

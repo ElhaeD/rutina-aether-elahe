@@ -28,17 +28,33 @@ export class ReminderAgent extends Agent<Env, ReminderState> {
     reminders: [],
   };
 
+  // =========================================================
+  // VAPID PUBLIC KEY
+  // =========================================================
+
   @callable()
   getVapidPublicKey(): string {
-    console.log("🔑 Entregando VAPID public key");
-    return this.env.VAPID_PUBLIC_KEY;
+    const key = this.env.VAPID_PUBLIC_KEY;
+
+    console.log("🔑 Solicitando VAPID public key");
+    console.log("Existe:", !!key);
+    console.log("Longitud:", key?.length ?? 0);
+
+    return key;
   }
+
+  // =========================================================
+  // SUBSCRIBE
+  // =========================================================
 
   @callable()
   async subscribe(
     subscription: Subscription
   ): Promise<{ ok: boolean }> {
-    console.log("📲 Nueva suscripción recibida");
+    console.log("====================================");
+    console.log("📲 NUEVA SUSCRIPCIÓN");
+    console.log("====================================");
+
     console.log("Endpoint:", subscription.endpoint);
 
     const exists = this.state.subscriptions.some(
@@ -67,6 +83,10 @@ export class ReminderAgent extends Agent<Env, ReminderState> {
     return { ok: true };
   }
 
+  // =========================================================
+  // UNSUBSCRIBE
+  // =========================================================
+
   @callable()
   async unsubscribe(
     endpoint: string
@@ -80,21 +100,33 @@ export class ReminderAgent extends Agent<Env, ReminderState> {
       ),
     });
 
+    console.log("✅ Suscripción eliminada");
+
     return { ok: true };
   }
+
+  // =========================================================
+  // CREATE REMINDER
+  // =========================================================
 
   @callable()
   async createReminder(
     message: string,
     delaySeconds: number
   ): Promise<Reminder> {
-    console.log("⏰ Creando recordatorio...");
+    console.log("====================================");
+    console.log("⏰ CREANDO RECORDATORIO");
+    console.log("====================================");
+
     console.log("Mensaje:", message);
-    console.log("Delay:", delaySeconds);
+    console.log("Delay recibido:", delaySeconds);
 
     const safeDelay = Math.max(
       5,
-      Math.min(delaySeconds, 60 * 60 * 24 * 30)
+      Math.min(
+        delaySeconds,
+        60 * 60 * 24 * 30
+      )
     );
 
     const id = crypto.randomUUID();
@@ -102,7 +134,8 @@ export class ReminderAgent extends Agent<Env, ReminderState> {
     const reminder: Reminder = {
       id,
       message,
-      scheduledAt: Date.now() + safeDelay * 1000,
+      scheduledAt:
+        Date.now() + safeDelay * 1000,
       sent: false,
     };
 
@@ -114,9 +147,15 @@ export class ReminderAgent extends Agent<Env, ReminderState> {
       ],
     });
 
-    console.log("💾 Recordatorio guardado:", id);
+    console.log("💾 Recordatorio guardado");
+    console.log("ID:", id);
+    console.log(
+      "Ejecutará en:",
+      safeDelay,
+      "segundos"
+    );
 
-    const schedule = await this.schedule(
+    const scheduleResult = await this.schedule(
       safeDelay,
       "sendReminder",
       {
@@ -125,81 +164,146 @@ export class ReminderAgent extends Agent<Env, ReminderState> {
       }
     );
 
-    console.log("📅 Schedule creado:", schedule);
+    console.log(
+      "📅 Schedule creado:",
+      scheduleResult
+    );
 
     return reminder;
   }
+
+  // =========================================================
+  // SEND REMINDER
+  // =========================================================
 
   async sendReminder(payload: {
     id: string;
     message: string;
   }) {
+    console.log("");
     console.log("====================================");
-    console.log("🚀 INICIANDO ENVÍO DE PUSH");
+    console.log("🚀 INICIANDO SEND REMINDER");
+    console.log("====================================");
+
     console.log("Reminder ID:", payload.id);
     console.log("Mensaje:", payload.message);
-    console.log("====================================");
 
     try {
-      console.log("🔐 Configurando VAPID...");
+      // -----------------------------------------------------
+      // 1. COMPROBAR VARIABLES
+      // -----------------------------------------------------
 
-      // DEBUG SEGURO:
-      // No mostramos ninguna clave completa.
-      console.log("🔎 VAPID PUBLIC KEY DEBUG");
+      console.log("");
+      console.log("🔐 COMPROBANDO VAPID");
+      console.log("------------------------------------");
+
+      const subject =
+        this.env.VAPID_SUBJECT;
+
+      const publicKey =
+        this.env.VAPID_PUBLIC_KEY;
+
+      const privateKey =
+        this.env.VAPID_PRIVATE_KEY;
+
       console.log(
-        "Public key existe:",
-        !!this.env.VAPID_PUBLIC_KEY
+        "VAPID_SUBJECT existe:",
+        !!subject
       );
+
+      console.log(
+        "VAPID_PUBLIC_KEY existe:",
+        !!publicKey
+      );
+
+      console.log(
+        "VAPID_PRIVATE_KEY existe:",
+        !!privateKey
+      );
+
       console.log(
         "Public key length:",
-        this.env.VAPID_PUBLIC_KEY?.length
-      );
-      console.log(
-        "Public key first char:",
-        this.env.VAPID_PUBLIC_KEY?.charAt(0)
-      );
-      console.log(
-        "Public key last char:",
-        this.env.VAPID_PUBLIC_KEY?.charAt(
-          this.env.VAPID_PUBLIC_KEY.length - 1
-        )
+        publicKey?.length ?? 0
       );
 
-      console.log("🔎 VAPID PRIVATE KEY DEBUG");
-      console.log(
-        "Private key existe:",
-        !!this.env.VAPID_PRIVATE_KEY
-      );
       console.log(
         "Private key length:",
-        this.env.VAPID_PRIVATE_KEY?.length
+        privateKey?.length ?? 0
       );
 
-      console.log("🔎 VAPID SUBJECT DEBUG");
+      // -----------------------------------------------------
+      // 2. LIMPIAR ESPACIOS ACCIDENTALES
+      // -----------------------------------------------------
+
+      const cleanSubject =
+        subject?.trim();
+
+      const cleanPublicKey =
+        publicKey?.trim();
+
+      const cleanPrivateKey =
+        privateKey?.trim();
+
       console.log(
-        "Subject existe:",
-        !!this.env.VAPID_SUBJECT
-      );
-      console.log(
-        "Subject:",
-        this.env.VAPID_SUBJECT
+        "Public key length después de trim:",
+        cleanPublicKey?.length ?? 0
       );
 
-      // Configurar VAPID
+      console.log(
+        "Private key length después de trim:",
+        cleanPrivateKey?.length ?? 0
+      );
+
+      // -----------------------------------------------------
+      // 3. VALIDAR QUE EXISTAN
+      // -----------------------------------------------------
+
+      if (
+        !cleanSubject ||
+        !cleanPublicKey ||
+        !cleanPrivateKey
+      ) {
+        throw new Error(
+          "Faltan variables VAPID en Cloudflare."
+        );
+      }
+
+      // -----------------------------------------------------
+      // 4. CONFIGURAR VAPID
+      // -----------------------------------------------------
+
+      console.log("");
+      console.log(
+        "🔑 Ejecutando webpush.setVapidDetails()..."
+      );
+
       webpush.setVapidDetails(
-        this.env.VAPID_SUBJECT,
-        this.env.VAPID_PUBLIC_KEY,
-        this.env.VAPID_PRIVATE_KEY
+        cleanSubject,
+        cleanPublicKey,
+        cleanPrivateKey
       );
-
-      console.log("✅ VAPID configurada correctamente");
 
       console.log(
-        "📦 Suscripciones encontradas:",
-        this.state.subscriptions.length
+        "✅ VAPID configurada correctamente"
       );
 
-      if (this.state.subscriptions.length === 0) {
+      // -----------------------------------------------------
+      // 5. COMPROBAR SUSCRIPCIONES
+      // -----------------------------------------------------
+
+      console.log("");
+      console.log("📦 SUSCRIPCIONES");
+      console.log("------------------------------------");
+
+      const subscriptions =
+        this.state.subscriptions;
+
+      console.log(
+        "Total:",
+        subscriptions.length
+      );
+
+      if (subscriptions.length === 0) {
         console.error(
           "❌ NO HAY SUSCRIPCIONES GUARDADAS"
         );
@@ -207,92 +311,106 @@ export class ReminderAgent extends Agent<Env, ReminderState> {
         return;
       }
 
+      // -----------------------------------------------------
+      // 6. ENVIAR PUSH
+      // -----------------------------------------------------
+
       const deadEndpoints: string[] = [];
 
-      await Promise.all(
-        this.state.subscriptions.map(
-          async (sub, index) => {
-            console.log(
-              `📤 Enviando push ${index + 1}/${this.state.subscriptions.length}`
-            );
+      for (
+        let index = 0;
+        index < subscriptions.length;
+        index++
+      ) {
+        const sub =
+          subscriptions[index];
 
-            console.log(
-              "Endpoint:",
-              sub.endpoint
-            );
-
-            try {
-              const result =
-                await webpush.sendNotification(
-                  sub,
-                  JSON.stringify({
-                    title:
-                      "Rutina Aether + Elahe 👑",
-                    body: payload.message,
-                    tag: `reminder-${payload.id}`,
-                    icon: "/icon.svg",
-                  })
-                );
-
-              console.log(
-                "✅ PUSH ENVIADO CORRECTAMENTE"
-              );
-
-              console.log(
-                "Resultado:",
-                result
-              );
-            } catch (err: unknown) {
-              console.error(
-                "❌ ERROR ENVIANDO PUSH"
-              );
-
-              console.error(
-                "Error completo:",
-                err
-              );
-
-              if (
-                err instanceof webpush.WebPushError
-              ) {
-                console.error(
-                  "Status:",
-                  err.statusCode
-                );
-
-                console.error(
-                  "Headers:",
-                  err.headers
-                );
-
-                console.error(
-                  "Body:",
-                  err.body
-                );
-
-                console.error(
-                  "Endpoint:",
-                  err.endpoint
-                );
-
-                if (
-                  err.statusCode === 404 ||
-                  err.statusCode === 410
-                ) {
-                  deadEndpoints.push(
-                    sub.endpoint
-                  );
-                }
-              }
-            }
-          }
-        )
-      );
-
-      if (deadEndpoints.length > 0) {
+        console.log("");
         console.log(
-          "🗑️ Eliminando suscripciones inválidas:",
-          deadEndpoints.length
+          `📤 ENVIANDO PUSH ${index + 1}/${subscriptions.length}`
+        );
+
+        console.log(
+          "Endpoint:",
+          sub.endpoint
+        );
+
+        try {
+          const result =
+            await webpush.sendNotification(
+              sub,
+              JSON.stringify({
+                title:
+                  "Rutina Aether + Elahe 👑",
+                body: payload.message,
+                tag:
+                  `reminder-${payload.id}`,
+                icon: "/icon.svg",
+              })
+            );
+
+          console.log(
+            "✅ PUSH ENVIADO"
+          );
+
+          console.log(
+            "Status code:",
+            result.statusCode
+          );
+        } catch (err: unknown) {
+          console.error(
+            "❌ ERROR ENVIANDO PUSH"
+          );
+
+          if (
+            err instanceof webpush.WebPushError
+          ) {
+            console.error(
+              "Status:",
+              err.statusCode
+            );
+
+            console.error(
+              "Body:",
+              err.body
+            );
+
+            console.error(
+              "Headers:",
+              err.headers
+            );
+
+            if (
+              err.statusCode === 404 ||
+              err.statusCode === 410
+            ) {
+              console.log(
+                "🗑️ Suscripción expirada/inválida"
+              );
+
+              deadEndpoints.push(
+                sub.endpoint
+              );
+            }
+          } else {
+            console.error(
+              "Error:",
+              err
+            );
+          }
+        }
+      }
+
+      // -----------------------------------------------------
+      // 7. ELIMINAR SUSCRIPCIONES MUERTAS
+      // -----------------------------------------------------
+
+      if (
+        deadEndpoints.length > 0
+      ) {
+        console.log("");
+        console.log(
+          "🗑️ ELIMINANDO SUSCRIPCIONES INVÁLIDAS"
         );
 
         this.setState({
@@ -305,24 +423,38 @@ export class ReminderAgent extends Agent<Env, ReminderState> {
                 )
             ),
         });
+
+        console.log(
+          "Eliminadas:",
+          deadEndpoints.length
+        );
       }
+
+      // -----------------------------------------------------
+      // 8. MARCAR RECORDATORIO COMO ENVIADO
+      // -----------------------------------------------------
 
       this.setState({
         ...this.state,
         reminders:
-          this.state.reminders.map((r) =>
-            r.id === payload.id
-              ? {
-                  ...r,
-                  sent: true,
-                }
-              : r
+          this.state.reminders.map(
+            (r) =>
+              r.id === payload.id
+                ? {
+                    ...r,
+                    sent: true,
+                  }
+                : r
           ),
       });
 
       console.log(
         "✅ Recordatorio marcado como enviado"
       );
+
+      // -----------------------------------------------------
+      // 9. BROADCAST
+      // -----------------------------------------------------
 
       this.broadcast(
         JSON.stringify({
@@ -336,25 +468,52 @@ export class ReminderAgent extends Agent<Env, ReminderState> {
         "📡 Broadcast enviado"
       );
 
-      console.log(
-        "===================================="
-      );
+      console.log("");
+      console.log("====================================");
       console.log(
         "🏁 SEND REMINDER TERMINADO"
       );
-      console.log(
-        "===================================="
-      );
-    } catch (err) {
+      console.log("====================================");
+
+    } catch (err: unknown) {
+      console.error("");
+      console.error("====================================");
       console.error(
-        "🔥 ERROR GENERAL EN sendReminder:",
+        "🔥 ERROR GENERAL EN SEND REMINDER"
+      );
+      console.error("====================================");
+
+      console.error(
+        "Error:",
         err
+      );
+
+      console.error(
+        "Mensaje:",
+        err instanceof Error
+          ? err.message
+          : String(err)
+      );
+
+      console.error(
+        "Stack:",
+        err instanceof Error
+          ? err.stack
+          : "sin stack"
+      );
+
+      console.error(
+        "===================================="
       );
 
       throw err;
     }
   }
 }
+
+// =========================================================
+// WORKER ENTRYPOINT
+// =========================================================
 
 export default {
   async fetch(
@@ -367,9 +526,12 @@ export default {
         request,
         env
       )) ??
-      new Response("Not found", {
-        status: 404,
-      })
+      new Response(
+        "Not found",
+        {
+          status: 404,
+        }
+      )
     );
   },
 } satisfies ExportedHandler<Env>;

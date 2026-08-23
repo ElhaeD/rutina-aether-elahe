@@ -1,0 +1,32 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "rutina-aether-elahe",
+  "main": "src/server.ts",
+  "compatibility_date": "2026-08-22",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "assets": {
+    "directory": "./public",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": [
+      "/agents/*"
+    ]
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "ReminderAgent",
+        "class_name": "ReminderAgent"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "ReminderAgent"
+      ]
+    }
+  ]
+}

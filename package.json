@@ -1,0 +1,20 @@
+{
+  "name": "rutina-aether-elahe",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "deploy": "vite build && wrangler deploy",
+    "types": "wrangler types env.d.ts --include-runtime false"
+  },
+  "dependencies": {
+    "agents": "latest",
+    "web-push": "latest"
+  },
+  "devDependencies": {
+    "vite": "latest",
+    "wrangler": "latest",
+    "typescript": "latest",
+    "@cloudflare/vite-plugin": "latest"
+  }
+}

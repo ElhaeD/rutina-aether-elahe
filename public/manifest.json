@@ -1,0 +1,17 @@
+{
+  "name": "Rutina Aether + Elahe",
+  "short_name": "Aether + Elahe",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0e0b13",
+  "theme_color": "#17121f",
+  "description": "Accountability personal con push real.",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

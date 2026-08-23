@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#17121f">
+  <link rel="manifest" href="/manifest.json">
+  <title>Rutina Aether + Elahe</title>
+
+  <style>
+    :root {
+      --bg: #0e0b13;
+      --card: #17121f;
+      --text: #f7f3fb;
+      --muted: #aaa0b7;
+      --accent: #b78cff;
+      --border: #30263c;
+      --danger: #ff9daa;
+      --ok: #78e0b0;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: radial-gradient(
+        circle at top,
+        #241735 0,
+        #0e0b13 45%
+      );
+      color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+    }
+
+    main {
+      max-width: 560px;
+      margin: auto;
+      padding: 18px 15px 42px;
+    }
+
+    .hero {
+      padding: 22px 18px;
+      border: 1px solid var(--border);
+      background: linear-gradient(
+        145deg,
+        #21172d,
+        #141019
+      );
+      border-radius: 24px;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 27px;
+      margin: 0 0 4px;
+    }
+
+    .sub,
+    small {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .card {
+      background: rgba(23, 18, 31, 0.95);
+      border: 1px solid var(--border);
+      border-radius: 19px;
+      padding: 16px;
+      margin: 10px 0;
+    }
+
+    .stat {
+      font-size: 26px;
+      font-weight: 850;
+    }
+
+    .label {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    h2 {
+      font-size: 18px;
+      margin: 0 0 12px;
+    }
+
+    button {
+      min-height: 44px;
+      border: 0;
+      border-radius: 12px;
+      padding: 10px 14px;
+      margin: 4px 4px 0 0;
+      font-weight: 750;
+      cursor: pointer;
+      background: var(--accent);
+      color: #170e20;
+    }
+
+    button.secondary {
+      background: #2a2233;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    button.danger {
+      background: #3a1d27;
+      color: #ffb5bd;
+      border: 1px solid #5a2935;
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .check {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid #2a2233;
+    }
+
+    .check:last-child {
+      border: 0;
+    }
+
+    .check input {
+      width: 20px;
+      height: 20px;
+      accent-color: var(--accent);
+    }
+
+    .timer {
+      text-align: center;
+      font-size: 48px;
+      font-weight: 900;
+      margin: 8px 0;
+    }
+
+    .center {
+      text-align: center;
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 5px 9px;
+      border-radius: 99px;
+      background: #2a2036;
+      color: #d9c9ed;
+      font-size: 12px;
+    }
+
+    .message {
+      padding: 12px;
+      border-radius: 13px;
+      background: #21192d;
+      border: 1px solid var(--border);
+      line-height: 1.4;
+    }
+
+    .progress {
+      height: 8px;
+      background: #2b2333;
+      border-radius: 99px;
+      overflow: hidden;
+      margin-top: 9px;
+    }
+
+    .bar {
+      height: 100%;
+      width: 0;
+      background: linear-gradient(
+        90deg,
+        #8b5cf6,
+        #b78cff
+      );
+      transition: width 0.25s;
+    }
+
+    select {
+      width: 100%;
+      background: #21192d;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      padding: 11px;
+      font-size: 15px;
+      margin-top: 7px;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    @media (max-width: 380px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <main>
+
+    <section class="hero">
+      <h1>Rutina Aether + Elahe ✦</h1>
+      <div class="sub" id="dateText"></div>
+    </section>
+
+    <div class="grid">
+
+      <div class="card">
+        <div class="label">🎮 GAMING HOY</div>
+        <div class="stat" id="gameStat">0 min</div>
+      </div>
+
+      <div class="card">
+        <div class="label">📚 ESTUDIO HOY</div>
+        <div class="stat" id="studyStat">0 min</div>
+      </div>
+
+    </div>
+
+    <section class="card">
+
+      <div class="row">
+        <h2>🧹 Rutina de mañana</h2>
+        <span class="pill" id="routineStat">0/3</span>
+      </div>
+
+      <label class="check">
+        <input type="checkbox" data-r="bed">
+        Tender la cama
+      </label>
+
+      <label class="check">
+        <input type="checkbox" data-r="sweep">
+        Barrer mi cuarto
+      </label>
+
+      <label class="check">
+        <input type="checkbox" data-r="wipe">
+        Pasar trapo a las cosas
+      </label>
+
+      <div class="progress">
+        <div class="bar" id="routineBar"></div>
+      </div>
+
+    </section>
+
+    <section class="card">
+
+      <h2>🔔 Notificaciones</h2>
+
+      <div class="message" id="pushStatus">
+        Activa las notificaciones para que Aether pueda
+        avisarte aunque cierres la app.
+      </div>
+
+      <button id="enablePush">
+        Activar push
+      </button>
+
+      <button class="secondary" id="testPush">
+        Probar en 10 segundos
+      </button>
+
+    </section>
+
+    <section class="card">
+
+      <h2>🎮 Gaming</h2>
+
+      <small>
+        Base actual: 90 minutos. Después haremos que
+        Aether ajuste el límite según tu día.
+      </small>
+
+      <select id="gameLimit">
+        <option value="60">60 min</option>
+        <option value="90" selected>90 min</option>
+        <option value="120">120 min</option>
+        <option value="150">150 min</option>
+      </select>
+
+      <button id="startGame">
+        Empecé a jugar
+      </button>
+
+    </section>
+
+    <section class="card">
+
+      <h2>📚 Curso / estudio</h2>
+
+      <small>
+        Bloque recomendado: 50 min + 10 min de descanso.
+      </small>
+
+      <button id="startStudy">
+        Empecé a estudiar
+      </button>
+
+    </section>
+
+    <section class="card hidden" id="sessionCard">
+
+      <div class="row">
+        <h2 id="sessionTitle">Sesión</h2>
+        <span class="pill" id="sessionPill">
+          ACTIVA
+        </span>
+      </div>
+
+      <div class="timer" id="timer">
+        00:00
+      </div>
+
+      <div class="center" id="sessionHint"></div>
+
+      <div class="center">
+
+        <button class="danger" id="finishBtn">
+          Terminé
+        </button>
+
+        <button class="secondary" id="continueBtn">
+          Seguí después
+        </button>
+
+      </div>
+
+    </section>
+
+    <section class="card">
+
+      <h2>🤖 Aether te dice</h2>
+
+      <div class="message" id="coach">
+        Primero activa el push. Después podemos probar
+        cerrando la app. 👑
+      </div>
+
+    </section>
+
+    <section class="card">
+
+      <h2>⚙️ Hoy</h2>
+
+      <button class="secondary" id="resetBtn">
+        Reiniciar datos de hoy
+      </button>
+
+    </section>
+
+  </main>
+
+  <!--
+    El código de la aplicación ahora está en:
+    src/client.ts
+
+    Vite se encargará de procesarlo.
+  -->
+  <script type="module" src="/src/client.ts"></script>
+
+</body>
+</html>

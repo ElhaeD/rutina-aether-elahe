@@ -33,7 +33,8 @@ const $ = (id: string) =>
 
 const agent = new AgentClient({
   agent: "ReminderAgent",
-  name: "elahe"
+  name: "elahe",
+  host: window.location.host
 });
 
 let vapidPublicKey: string | null = null;

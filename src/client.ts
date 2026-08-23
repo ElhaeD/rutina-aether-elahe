@@ -25,72 +25,35 @@ if (!state || state.date !== today()) {
   };
 }
 
-const save = () => {
+const save = () =>
   localStorage.setItem(KEY, JSON.stringify(state));
-};
 
 const $ = (id: string) =>
   document.getElementById(id) as HTMLElement;
 
 const agent = new AgentClient({
   agent: "ReminderAgent",
-  name: "elahe",
-  host: window.location.host
+  name: "elahe"
 });
 
 let vapidPublicKey: string | null = null;
 
-function render() {
-  $("dateText").textContent =
-    new Date().toLocaleDateString("es-PE", {
-      weekday: "long",
-      day: "numeric",
-      month: "long"
-    });
-
-  $("gameStat").textContent = `${Math.round(state.game)} min`;
-  $("studyStat").textContent = `${Math.round(state.study)} min`;
-
-  document
-    .querySelectorAll<HTMLInputElement>("[data-r]")
-    .forEach((x) => {
-      x.checked = !!state.routine[x.dataset.r!];
-    });
-
-  const done = Object.values(state.routine).filter(Boolean).length;
-
-  $("routineStat").textContent = `${done}/3`;
-
-  (
-    document.getElementById("routineBar") as HTMLElement
-  ).style.width = `${(done / 3) * 100}%`;
-
-  if (done === 3) {
-    $("coach").textContent =
-      "🔥 Rutina completa. Casa en orden, rey.";
-  }
-
-  if (state.session) {
-    $("sessionCard").classList.remove("hidden");
-    showSession();
-    tick();
-  } else {
-    $("sessionCard").classList.add("hidden");
-  }
-}
+/* =========================================================
+   UTILIDADES
+========================================================= */
 
 function b64ToUint8(base64url: string): Uint8Array {
-  if (!base64url || typeof base64url !== "string") {
-    throw new Error("VAPID_PUBLIC_KEY inválida o vacía.");
-  }
+  const normalized = base64url
+    .trim()
+    .replace(/"/g, "")
+    .replace(/-/g, "+")
+    .replace(/_/g, "/");
 
   const padded =
-    base64url +
-    "=".repeat((4 - (base64url.length % 4)) % 4);
+    normalized +
+    "=".repeat((4 - (normalized.length % 4)) % 4);
 
-  const binary = atob(
-    padded.replace(/-/g, "+").replace(/_/g, "/")
-  );
+  const binary = atob(padded);
 
   const bytes = new Uint8Array(binary.length);
 
@@ -101,36 +64,78 @@ function b64ToUint8(base64url: string): Uint8Array {
   return bytes;
 }
 
-async function getPublicKey(): Promise<string> {
-  const result = await agent.call("getVapidPublicKey");
+/* =========================================================
+   RENDER
+========================================================= */
 
-  if (typeof result !== "string" || !result.trim()) {
-    console.error("Respuesta VAPID recibida:", result);
+function render() {
+  $("dateText").textContent =
+    new Date().toLocaleDateString("es-PE", {
+      weekday: "long",
+      day: "numeric",
+      month: "long"
+    });
 
-    throw new Error(
-      "Cloudflare no devolvió una VAPID public key válida."
-    );
+  $("gameStat").textContent =
+    `${Math.round(state.game)} min`;
+
+  $("studyStat").textContent =
+    `${Math.round(state.study)} min`;
+
+  document
+    .querySelectorAll<HTMLInputElement>("[data-r]")
+    .forEach((x) => {
+      x.checked = !!state.routine[x.dataset.r!];
+    });
+
+  const done =
+    Object.values(state.routine).filter(Boolean).length;
+
+  $("routineStat").textContent =
+    `${done}/3`;
+
+  (
+    document.getElementById("routineBar") as HTMLElement
+  ).style.width =
+    `${(done / 3) * 100}%`;
+
+  if (done === 3) {
+    $("coach").textContent =
+      "🔥 Rutina completa. Casa en orden, rey.";
   }
 
-  return result;
+  if (state.session) {
+    $("sessionCard").classList.remove("hidden");
+    showSession();
+  } else {
+    $("sessionCard").classList.add("hidden");
+  }
 }
+
+/* =========================================================
+   PUSH NOTIFICATIONS
+========================================================= */
 
 async function enablePush() {
   try {
+    /* -----------------------------------------------------
+       1. Verificar soporte del navegador
+    ----------------------------------------------------- */
+
     if (
       !("serviceWorker" in navigator) ||
-      !("PushManager" in window)
+      !("PushManager" in window) ||
+      !("Notification" in window)
     ) {
       $("pushStatus").textContent =
-        "Este navegador no admite Push API.";
+        "Este navegador no admite las notificaciones Push.";
+
       return;
     }
 
-    if (!("Notification" in window)) {
-      $("pushStatus").textContent =
-        "Este navegador no admite notificaciones.";
-      return;
-    }
+    /* -----------------------------------------------------
+       2. Pedir permiso al usuario
+    ----------------------------------------------------- */
 
     const permission =
       await Notification.requestPermission();
@@ -138,39 +143,102 @@ async function enablePush() {
     if (permission !== "granted") {
       $("pushStatus").textContent =
         "Permiso de notificaciones no concedido.";
+
       return;
     }
 
+    /* -----------------------------------------------------
+       3. Registrar Service Worker
+    ----------------------------------------------------- */
+
     await navigator.serviceWorker.register("/sw.js");
 
-    vapidPublicKey = await getPublicKey();
+    /* -----------------------------------------------------
+       4. Obtener VAPID public key desde Cloudflare
+    ----------------------------------------------------- */
+
+    const response =
+      await agent.call("getVapidPublicKey");
+
+    console.log(
+      "Respuesta VAPID recibida:",
+      response
+    );
+
+    if (!response) {
+      throw new Error(
+        "Cloudflare no devolvió una VAPID public key."
+      );
+    }
+
+    vapidPublicKey = String(response).trim();
 
     console.log(
       "VAPID public key recibida correctamente."
     );
 
+    /* -----------------------------------------------------
+       5. Convertir la clave a Uint8Array
+    ----------------------------------------------------- */
+
+    const keyBytes =
+      b64ToUint8(vapidPublicKey);
+
+    console.log(
+      "VAPID key bytes:",
+      keyBytes.length
+    );
+
+    /* -----------------------------------------------------
+       6. Validar tamaño de clave P-256
+    ----------------------------------------------------- */
+
+    if (keyBytes.length !== 65) {
+      throw new Error(
+        `La VAPID public key debe tener 65 bytes. Tiene ${keyBytes.length}.`
+      );
+    }
+
+    /* -----------------------------------------------------
+       7. Esperar Service Worker
+    ----------------------------------------------------- */
+
     const reg =
       await navigator.serviceWorker.ready;
 
+    /* -----------------------------------------------------
+       8. Buscar suscripción existente
+    ----------------------------------------------------- */
+
     let sub =
       await reg.pushManager.getSubscription();
+
+    /* -----------------------------------------------------
+       9. Crear suscripción Push
+    ----------------------------------------------------- */
 
     if (!sub) {
       sub =
         await reg.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey:
-            b64ToUint8(vapidPublicKey)
+          applicationServerKey: keyBytes
         });
     }
 
+    /* -----------------------------------------------------
+       10. Convertir suscripción a JSON
+    ----------------------------------------------------- */
+
     const j = sub.toJSON();
 
-    if (!j.endpoint || !j.keys) {
-      throw new Error(
-        "El navegador no devolvió una suscripción Push válida."
-      );
-    }
+    console.log(
+      "Push subscription creada:",
+      j
+    );
+
+    /* -----------------------------------------------------
+       11. Enviar suscripción al Agent
+    ----------------------------------------------------- */
 
     await agent.call("subscribe", [
       {
@@ -180,6 +248,10 @@ async function enablePush() {
         keys: j.keys
       }
     ]);
+
+    /* -----------------------------------------------------
+       12. ÉXITO
+    ----------------------------------------------------- */
 
     $("pushStatus").textContent =
       "✅ Push activado. Aether puede avisarte aunque cierres la app.";
@@ -197,9 +269,13 @@ async function enablePush() {
       "❌ No se pudo activar el push.";
 
     $("coach").textContent =
-      "Hay un problema con la configuración VAPID. Mira la consola.";
+      "Falló la activación del push. Mira la consola para ver el error.";
   }
 }
+
+/* =========================================================
+   CREAR RECORDATORIO
+========================================================= */
 
 async function createReminder(
   message: string,
@@ -211,7 +287,7 @@ async function createReminder(
     }
 
     if (
-      !vapidPublicKey ||
+      !("Notification" in window) ||
       Notification.permission !== "granted"
     ) {
       return;
@@ -224,14 +300,18 @@ async function createReminder(
 
   } catch (e) {
     console.error(
-      "ERROR CREANDO REMINDER:",
+      "ERROR CREANDO RECORDATORIO:",
       e
     );
 
     $("coach").textContent =
-      "No pude programar el push.";
+      "No pude programar el push. Primero activa las notificaciones.";
   }
 }
+
+/* =========================================================
+   GAMING / ESTUDIO
+========================================================= */
 
 function start(
   type: "game" | "study"
@@ -239,6 +319,7 @@ function start(
   if (state.session) {
     $("coach").textContent =
       "Ya tienes una sesión activa. Primero ciérrala.";
+
     return;
   }
 
@@ -262,9 +343,11 @@ function start(
   save();
 
   showSession();
+
   tick();
 
-  const seconds = limit * 60;
+  const seconds =
+    limit * 60;
 
   const msg =
     type === "game"
@@ -293,15 +376,24 @@ function showSession() {
       : "BLOQUE ACTIVO";
 }
 
+/* =========================================================
+   TIMER
+========================================================= */
+
 function tick() {
   if (!state.session) return;
 
   const left =
     state.session.limit * 60000 -
-    (Date.now() - state.session.start);
+    (
+      Date.now() -
+      state.session.start
+    );
 
   const sec =
-    Math.floor(Math.abs(left) / 1000);
+    Math.floor(
+      Math.abs(left) / 1000
+    );
 
   $("timer").textContent =
     (left < 0 ? "+" : "") +
@@ -309,7 +401,9 @@ function tick() {
       Math.floor(sec / 60)
     ).padStart(2, "0") +
     ":" +
-    String(sec % 60).padStart(2, "0");
+    String(
+      sec % 60
+    ).padStart(2, "0");
 
   $("sessionHint").textContent =
     left > 0
@@ -322,26 +416,38 @@ function tick() {
     (window as any).__rae
   );
 
-  (window as any).__rae =
-    setTimeout(tick, 1000);
+  (
+    window as any
+  ).__rae =
+    setTimeout(
+      tick,
+      1000
+    );
 }
+
+/* =========================================================
+   FINALIZAR SESIÓN
+========================================================= */
 
 function finish() {
   if (!state.session) return;
 
-  const mins = Math.max(
-    1,
-    Math.round(
-      (Date.now() -
-        state.session.start) /
-        60000
-    )
-  );
+  const mins =
+    Math.max(
+      1,
+      Math.round(
+        (
+          Date.now() -
+          state.session.start
+        ) / 60000
+      )
+    );
 
   const type =
     state.session.type;
 
   state[type] += mins;
+
   state.session = null;
 
   save();
@@ -358,6 +464,10 @@ function finish() {
       : "Buen bloque. Descansa 10 minutos.";
 }
 
+/* =========================================================
+   CHECKLIST DE RUTINA
+========================================================= */
+
 document
   .querySelectorAll<HTMLInputElement>(
     "[data-r]"
@@ -371,79 +481,128 @@ document
         ] = x.checked;
 
         save();
+
         render();
       }
     )
   );
 
-$("enablePush").addEventListener(
-  "click",
-  enablePush
-);
+/* =========================================================
+   BOTÓN ACTIVAR PUSH
+========================================================= */
 
-$("testPush").addEventListener(
-  "click",
-  () =>
-    createReminder(
-      "🔔 PRUEBA DE RUTINA AETHER + ELAHE. Si cerraste la app, este push debería aparecer igual. 👑",
-      10
-    )
-);
+$("enablePush")
+  .addEventListener(
+    "click",
+    enablePush
+  );
 
-$("startGame").addEventListener(
-  "click",
-  () => start("game")
-);
+/* =========================================================
+   BOTÓN PRUEBA PUSH
+========================================================= */
 
-$("startStudy").addEventListener(
-  "click",
-  () => start("study")
-);
-
-$("finishBtn").addEventListener(
-  "click",
-  finish
-);
-
-$("continueBtn").addEventListener(
-  "click",
-  () => {
-    if (state.session) {
-      state.session.start =
-        Date.now();
-
-      save();
-
-      $("coach").textContent =
-        "Seguimos. Pero te estoy vigilando. 😈";
-
-      tick();
-    }
-  }
-);
-
-$("resetBtn").addEventListener(
-  "click",
-  () => {
-    if (
-      confirm(
-        "¿Reiniciar los datos de hoy?"
+$("testPush")
+  .addEventListener(
+    "click",
+    () =>
+      createReminder(
+        "🔔 PRUEBA DE RUTINA AETHER + ELAHE. Si cerraste la app, este push debería aparecer igual. 👑",
+        10
       )
-    ) {
-      localStorage.removeItem(KEY);
-      location.reload();
+  );
+
+/* =========================================================
+   BOTÓN GAMING
+========================================================= */
+
+$("startGame")
+  .addEventListener(
+    "click",
+    () =>
+      start("game")
+  );
+
+/* =========================================================
+   BOTÓN ESTUDIO
+========================================================= */
+
+$("startStudy")
+  .addEventListener(
+    "click",
+    () =>
+      start("study")
+  );
+
+/* =========================================================
+   BOTÓN FINALIZAR
+========================================================= */
+
+$("finishBtn")
+  .addEventListener(
+    "click",
+    finish
+  );
+
+/* =========================================================
+   CONTINUAR SESIÓN
+========================================================= */
+
+$("continueBtn")
+  .addEventListener(
+    "click",
+    () => {
+      if (state.session) {
+        state.session.start =
+          Date.now();
+
+        save();
+
+        $("coach").textContent =
+          "Seguimos. Pero te estoy vigilando. 😈";
+
+        tick();
+      }
     }
-  }
-);
+  );
+
+/* =========================================================
+   RESET
+========================================================= */
+
+$("resetBtn")
+  .addEventListener(
+    "click",
+    () => {
+      if (
+        confirm(
+          "¿Reiniciar los datos de hoy?"
+        )
+      ) {
+        localStorage.removeItem(
+          KEY
+        );
+
+        location.reload();
+      }
+    }
+  );
+
+/* =========================================================
+   REGISTRAR SERVICE WORKER
+========================================================= */
 
 navigator.serviceWorker
   ?.register("/sw.js")
-  .catch((err) =>
-    console.error(
-      "Service Worker:",
-      err
-    )
+  .catch(
+    (e) =>
+      console.error(
+        "No se pudo registrar sw.js:",
+        e
+      )
   );
 
-render();
+/* =========================================================
+   INICIO
+========================================================= */
 
+render();

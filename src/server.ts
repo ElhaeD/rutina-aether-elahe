@@ -143,13 +143,56 @@ export class ReminderAgent extends Agent<Env, ReminderState> {
     try {
       console.log("🔐 Configurando VAPID...");
 
+      // DEBUG SEGURO:
+      // No mostramos ninguna clave completa.
+      console.log("🔎 VAPID PUBLIC KEY DEBUG");
+      console.log(
+        "Public key existe:",
+        !!this.env.VAPID_PUBLIC_KEY
+      );
+      console.log(
+        "Public key length:",
+        this.env.VAPID_PUBLIC_KEY?.length
+      );
+      console.log(
+        "Public key first char:",
+        this.env.VAPID_PUBLIC_KEY?.charAt(0)
+      );
+      console.log(
+        "Public key last char:",
+        this.env.VAPID_PUBLIC_KEY?.charAt(
+          this.env.VAPID_PUBLIC_KEY.length - 1
+        )
+      );
+
+      console.log("🔎 VAPID PRIVATE KEY DEBUG");
+      console.log(
+        "Private key existe:",
+        !!this.env.VAPID_PRIVATE_KEY
+      );
+      console.log(
+        "Private key length:",
+        this.env.VAPID_PRIVATE_KEY?.length
+      );
+
+      console.log("🔎 VAPID SUBJECT DEBUG");
+      console.log(
+        "Subject existe:",
+        !!this.env.VAPID_SUBJECT
+      );
+      console.log(
+        "Subject:",
+        this.env.VAPID_SUBJECT
+      );
+
+      // Configurar VAPID
       webpush.setVapidDetails(
         this.env.VAPID_SUBJECT,
         this.env.VAPID_PUBLIC_KEY,
         this.env.VAPID_PRIVATE_KEY
       );
 
-      console.log("✅ VAPID configurada");
+      console.log("✅ VAPID configurada correctamente");
 
       console.log(
         "📦 Suscripciones encontradas:",
@@ -160,6 +203,7 @@ export class ReminderAgent extends Agent<Env, ReminderState> {
         console.error(
           "❌ NO HAY SUSCRIPCIONES GUARDADAS"
         );
+
         return;
       }
 
